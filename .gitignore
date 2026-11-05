@@ -1,0 +1,68 @@
+# OS and filesystem noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor and IDE state
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local AI assistant state
+.claude
+.claude/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.codex
+.codex/
+.agents
+.agents/
+.gemini
+.gemini/
+.cursor
+.cursor/
+.windsurf
+.windsurf/
+.roo
+.roo/
+.cline
+.cline/
+.continue
+.continue/
+.opencode
+.opencode/
+.crush
+.crush/
+.serena
+.serena/
+.qodo
+.qodo/
+.mcp
+.mcp/
+.mcp.json
+.aider*
+
+# Local notes
+CHANGELOG.md
+
+# Lua build output
+luac.out
+*.luac
+
+# Addon packaging output
+*.zip
+*.tar.gz
+*.src.rock
+
+# WoW client folders, never part of the addon source
+Interface/
+WTF/
+
+# Backups and scratch files
+*.bak
+*.orig
+*.rej
+*.tmp
