@@ -1,0 +1,8 @@
+<Bindings>
+	<Binding name="ZUGZUGREBORN_SCAN" header="ZUGZUGREBORN" category="ADDONS">
+		ZUGZUGReborn.BindingScan()
+	</Binding>
+	<Binding name="ZUGZUGREBORN_POST" category="ADDONS">
+		ZUGZUGReborn.BindingPost()
+	</Binding>
+</Bindings>
