@@ -569,8 +569,13 @@ end
 function UI.BuildCrafters(parent, inset)
   view = CreateFrame("Frame", nil, parent)
   view:SetAllPoints(parent)
-  view:EnableMouse(true)
-  view:SetScript("OnMouseUp", function(_, button) MouseBack(button) end)
+
+  -- Only the content area, so the feature tabs above stay clickable.
+  local catcher = CreateFrame("Frame", nil, view)
+  catcher:SetAllPoints(inset)
+  catcher:SetFrameLevel(view:GetFrameLevel())
+  catcher:EnableMouse(true)
+  catcher:SetScript("OnMouseUp", function(_, button) MouseBack(button) end)
 
   view.Search = CreateFrame("EditBox", nil, view, "SearchBoxTemplate")
   view.Search:SetSize(180, 20)

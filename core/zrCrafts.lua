@@ -488,7 +488,9 @@ function Crafts.RecipesOf(name, skill)
 end
 
 function Crafts.OwnHint()
-  if auto.job or auto.queue then return "Reading your professions..." end
+  if auto.job then return "Reading your professions..." end
+  -- Opening a profession now would shove the guild window aside.
+  if auto.queue then return "Your professions are read once this window closes." end
   local rec = Crafts.Get(ZR.PlayerName())
   for skill, p in pairs(rec and rec.p or {}) do
     if (p.t or 0) == 0 and Crafts.HasRecipes(skill) then
