@@ -27,17 +27,37 @@ function ZR.IsGuildMember(name)
   return false
 end
 
+local complete = false
+
 -- Legacy roster globals are not in Blizzard's own code on this client.
 function ZR.RefreshRoster()
   wipe(roster)
+  complete = false
   if not GetNumGuildMembers or not GetGuildRosterInfo then return end
-  for i = 1, (GetNumGuildMembers() or 0) do
-    local name = GetGuildRosterInfo(i)
+  local total, seen = GetNumGuildMembers() or 0, 0
+  for i = 1, total do
+    local name, _, _, _, _, _, _, _, online, _, classFile = GetGuildRosterInfo(i)
     if name and not ZR.IsSecret(name) then
-      roster[name] = true
-      roster[StripRealm(name)] = true
+      local info = { online = online and true or false, classFile = classFile }
+      if not online and GetGuildRosterLastOnline then
+        local y, mo, d, h = GetGuildRosterLastOnline(i)
+        if y then info.away = (((y * 365 + mo * 30 + d) * 24) + h) * 3600 end
+      end
+      roster[name] = info
+      roster[StripRealm(name)] = info
+      seen = seen + 1
     end
   end
+  -- A roster showing online members only must never count as everyone.
+  complete = total > 0 and seen == total
+end
+
+function ZR.RosterInfo(name)
+  return name and roster[name] or nil
+end
+
+function ZR.RosterComplete()
+  return complete
 end
 
 function ZR.RequestRoster()

@@ -1,6 +1,6 @@
 # ZUGZUG Reborn
 
-Guild recruiting built right into the Guild & Communities window. Post your ad, scan for players, invite them and answer whispers without leaving it.
+Guild recruiting and a guild crafters directory, built right into the Guild & Communities window.
 
 Runs on **WoW Forever**.
 
@@ -13,11 +13,13 @@ Runs on **WoW Forever**.
 - **No double spam** — contacted players hide for 3 days, declines stay visible with a count
 - **Whispers** — every whisper in one inbox, reply right there
 - **Officer sync** — officers share who was already contacted, even across layers
-- **Officers only** — everyone else sees a locked page
+- **Crafters** — for every guild member: search who can craft an item, browse by profession or Auction House category, see each member's recipes and whisper them
+- **Automatic** — your recipes are read at login and shared with the guild, new ones as soon as you learn them
+- **Officers only** — Recruitment is locked for everyone else
 
 ## Using it
 
-Click the minimap icon, or open the guild window with `J` and pick the peon tab.
+Click the minimap icon, or open the guild window with `J` and pick the peon tab. It opens where you left off.
 
 `/zr help` lists the rest.
 

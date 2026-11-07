@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: <|cff00ff00ZUGZUG Reborn|r> v1.0.0
-## Notes: Guild recruiting inside the Guild & Communities window - by Jemi
+## Notes: Guild recruiting and a guild crafters directory inside the Guild & Communities window - by Jemi
 ## Author: Jamie/Jemi
 ## Version: 1.0.0
 ## Category: Jemi
@@ -23,6 +23,9 @@ core/zrChannels.lua
 core/zrInvite.lua
 core/zrInbox.lua
 core/zrSync.lua
+core/zrItemCategories.lua
+core/zrCrafts.lua
+core/zrCraftSync.lua
 
 ui/zrWidgets.lua
 ui/zrGuildFrame.lua
@@ -30,6 +33,9 @@ ui/recruitment/zrRecruitMessage.lua
 ui/recruitment/zrFastInvite.lua
 ui/recruitment/zrWhispers.lua
 ui/zrPanels_Recruitment.lua
+ui/crafters/zrCategoryList.lua
+ui/crafters/zrCrafters.lua
+ui/zrPanels_Crafters.lua
 ui/zrMinimap.lua
 
 core/zrSlashCommands.lua

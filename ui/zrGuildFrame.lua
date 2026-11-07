@@ -23,6 +23,16 @@ local function Feature(key)
   return UI.features[1]
 end
 
+-- Reopens where the player left off; first time, officers start on Recruitment.
+local function DefaultKey()
+  return currentKey or ZR.DB().lastFeature or (ZR.IsOfficer() and "recruitment" or "crafters")
+end
+
+local function SavedTab(f)
+  local tabs = ZR.DB().lastTabs
+  return tabs and tabs[f.key]
+end
+
 local function IsGuildClub(clubId)
   return clubId ~= nil and clubId == C_Club.GetGuildClubId()
 end
@@ -188,6 +198,8 @@ end
 
 function GF.SelectSubTab(f, index)
   f.lastTab = index
+  ZR.DB().lastTabs = ZR.DB().lastTabs or {}
+  ZR.DB().lastTabs[f.key] = index
   PanelTemplates_SetTab(f.holder, index)
   if f.selectTab then f.selectTab(index) end
 end
@@ -196,6 +208,7 @@ function GF.SelectFeature(key)
   local f = Feature(key)
   if not f then return end
   currentKey = f.key
+  ZR.DB().lastFeature = f.key
   local allowed = not f.officerOnly or ZR.IsOfficer()
   for _, other in ipairs(UI.features) do
     UI.SetIconTabSelected(other.iconTab, other == f)
@@ -212,7 +225,7 @@ function GF.SelectFeature(key)
     if f.holder then
       f.holder:Show()
       GF.RefreshTabLabels()
-      GF.SelectSubTab(f, f.lastTab or 1)
+      GF.SelectSubTab(f, f.lastTab or SavedTab(f) or 1)
     end
   else
     if f.frame then f.frame:Hide() end
@@ -227,7 +240,8 @@ end
 -- tabIndex optionally picks a bottom tab.
 function GF.ShowPage(key, tabIndex)
   if not cf or not BuildPage() then return end
-  if tabIndex then Feature(key or currentKey).lastTab = tabIndex end
+  key = key or DefaultKey()
+  if tabIndex then Feature(key).lastTab = tabIndex end
   under:Show()
   page:Show()
   local bar = cf.Chat and cf.Chat.ScrollBar
@@ -237,7 +251,7 @@ function GF.ShowPage(key, tabIndex)
   end
   sideTab:SetChecked(true)
   UncheckBlizzardTabs()
-  GF.SelectFeature(key or currentKey)
+  GF.SelectFeature(key)
   ZR.RequestRoster()
 end
 
@@ -333,7 +347,7 @@ function ZR.TogglePage()
   if GF.IsShown() and cf:IsShown() then
     HideUIPanel(cf)
   else
-    ZR.OpenPage("recruitment")
+    ZR.OpenPage()
   end
 end
 

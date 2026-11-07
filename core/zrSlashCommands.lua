@@ -5,8 +5,10 @@ SLASH_ZUGZUGREBORN2 = "/zr"
 
 local function PrintHelp()
   ZR.Msg("Commands:")
-  ZR.Msg("  |cffffd100/zr|r - open Recruitment in the Guild window")
+  ZR.Msg("  |cffffd100/zr|r - open the Guild window page where you left off")
+  ZR.Msg("  |cffffd100/zr recruit|r - open Recruitment")
   ZR.Msg("  |cffffd100/zr whispers|r - open the Whispers tab")
+  ZR.Msg("  |cffffd100/zr craft <item>|r - find who in the guild can craft it")
   ZR.Msg("  |cffffd100/zr minimap|r - show or hide the minimap icon")
   ZR.Msg("  |cffffd100/zr invite chat|r or |cffffd100copy|r - how Invite hands you /ginvite")
   ZR.Msg("  |cffffd100/zr sync on|r or |cffffd100off|r - share contacts with other officers")
@@ -19,7 +21,18 @@ SlashCmdList["ZUGZUGREBORN"] = function(msg)
   local cmd, arg = msg:match("^(%S*)%s*(.-)$")
 
   if cmd == "" then
+    ZR.OpenPage()
+    return
+  end
+
+  if cmd == "recruit" or cmd == "recruitment" then
     ZR.OpenPage("recruitment")
+    return
+  end
+
+  if cmd == "craft" or cmd == "crafters" then
+    ZR.OpenPage("crafters")
+    if arg ~= "" then ZR.UI.CraftersSearch(arg) end
     return
   end
 

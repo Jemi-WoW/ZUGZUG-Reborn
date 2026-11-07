@@ -96,8 +96,9 @@ local handlers = {}
 
 function ZR.RegisterEvent(event, fn)
   if not handlers[event] then
+    -- Unknown events error on register, so one missing event cannot break the file.
+    if not pcall(eventFrame.RegisterEvent, eventFrame, event) then return end
     handlers[event] = {}
-    eventFrame:RegisterEvent(event)
   end
   table.insert(handlers[event], fn)
 end
