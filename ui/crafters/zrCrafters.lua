@@ -72,6 +72,11 @@ local function SkillText(p)
   return p.r .. "/" .. p.m
 end
 
+local function ClassIcon(name)
+  local class = ClassOf(name)
+  return class and ("|A:classicon-%s:14:14|a "):format(class:lower()) or ""
+end
+
 local function SortedCrafters(e)
   local list = {}
   for _, n in ipairs(e.crafters or {}) do
@@ -89,7 +94,7 @@ end
 local function CraftersText(e)
   local list, parts = SortedCrafters(e), {}
   for i = 1, math.min(3, #list) do
-    parts[i] = (list[i].on and "|cff40ff40" or "|cff9d9d9d") .. list[i].name .. "|r"
+    parts[i] = ClassIcon(list[i].name) .. (list[i].on and "|cff40ff40" or "|cff9d9d9d") .. list[i].name .. "|r"
   end
   local text = table.concat(parts, ", ")
   if #list > 3 then text = text .. ("  |cffffd100+%d|r"):format(#list - 3) end
@@ -441,6 +446,16 @@ Update = function()
   items:SetShown(mode == "items")
   members:SetShown(mode == "members" or mode == "crafters")
   recipes:SetShown(mode == "recipes")
+  local onItem = mode == "crafters" and state.item ~= nil
+  view.ItemBar:SetShown(onItem)
+  members:SetPoint("TOPLEFT", view.Categories, "TOPRIGHT", 6, onItem and -34 or -2)
+  if onItem then
+    local e = state.item
+    view.ItemBar.Icon:SetTexture(e.icon or QUESTION_MARK)
+    view.ItemBar.Name:SetText(Crafts.Name(e) or (RETRIEVING_ITEM_INFO or "Loading..."))
+    SetQualityColor(view.ItemBar.Name, e)
+    view.ItemBar.Prof:SetText(Crafts.ProfName(e.skill))
+  end
 
   local rows, crumb, count, empty = {}, "", nil, nil
   if not Crafts.Store() then
@@ -601,6 +616,29 @@ function UI.BuildCrafters(parent, inset)
     t:SetPoint("TOPLEFT", view.Categories, "TOPRIGHT", 6, -2)
     t:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -6, 6)
   end
+  local bar = CreateFrame("Button", nil, view)
+  bar:SetPoint("TOPLEFT", view.Categories, "TOPRIGHT", 8, -4)
+  bar:SetPoint("RIGHT", inset, "RIGHT", -8, 0)
+  bar:SetHeight(24)
+  bar.Icon = bar:CreateTexture(nil, "ARTWORK")
+  bar.Icon:SetSize(24, 24)
+  bar.Icon:SetPoint("LEFT")
+  bar.Name = UI.Text(bar, "GameFontNormalLarge")
+  bar.Name:SetPoint("LEFT", bar.Icon, "RIGHT", 8, 0)
+  bar.Prof = UI.Text(bar, "GameFontDisableSmall")
+  bar.Prof:SetPoint("LEFT", bar.Name, "RIGHT", 10, -1)
+  bar:SetScript("OnEnter", function(self)
+    if not state.item then return end
+    EntryTooltip(self, state.item)
+    GameTooltip:Show()
+  end)
+  bar:SetScript("OnLeave", GameTooltip_Hide)
+  bar:SetScript("OnClick", function()
+    if state.item and IsModifiedClick("CHATLINK") then InsertLink(LinkOf(state.item)) end
+  end)
+  bar:Hide()
+  view.ItemBar = bar
+
   items.Header.sortingFunction = Sorter(itemSort, ITEM_COLUMNS)
   members.Header.sortingFunction = Sorter(memberSort, MEMBER_COLUMNS)
   recipes.Header.sortingFunction = Sorter(recipeSort, RECIPE_COLUMNS)
