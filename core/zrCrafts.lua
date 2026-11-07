@@ -190,6 +190,7 @@ end
 
 local tradeOpen, scanToken = false, 0
 
+-- Returns the profession read, or nil if the window had nothing yet.
 local function Scan(force)
   if not (tradeOpen or force) or not IsOwnWindow() or not C_TradeSkillUI.GetBaseProfessionInfo then return end
   local info = C_TradeSkillUI.GetBaseProfessionInfo()
@@ -209,27 +210,39 @@ local function Scan(force)
     -- The filtered list follows the window's search, so only ever add to it.
     ids, complete = C_TradeSkillUI.GetFilteredRecipeIDs and C_TradeSkillUI.GetFilteredRecipeIDs(), false
   end
-  local list = complete and {} or CopyTable(p.l or {})
+  local list, found = complete and {} or CopyTable(p.l or {}), 0
   for _, id in ipairs(ids or {}) do
     local r = C_TradeSkillUI.GetRecipeInfo(id)
-    if r and r.learned then list[id] = OutputItem(id) end
+    if r and r.learned then
+      list[id] = OutputItem(id)
+      found = found + 1
+    end
   end
-  if next(list) == nil or Same(list, p.l or {}) then return end
-  p.l, p.t = list, ZR.Now()
-  Crafts.Changed()
-  if ZR.CraftSync then ZR.CraftSync.SendProf(me, skill) end
+  if found == 0 then return end
+  if not Same(list, p.l or {}) then
+    p.l, p.t = list, ZR.Now()
+    Crafts.Changed()
+    if ZR.CraftSync then ZR.CraftSync.SendProf(me, skill) end
+  end
+  return skill
 end
+
+local auto = { ok = {}, tries = {}, retryAt = {} }
 
 local function ScheduleScan(delay)
   scanToken = scanToken + 1
   local token = scanToken
   C_Timer.After(delay, function()
-    if token == scanToken then Scan() end
+    if token ~= scanToken then return end
+    local skill = Scan()
+    if skill then auto.ok[skill] = true end
   end)
 end
 
 -- Background scan: opens each profession hidden and muted, reads it, closes it.
-local auto = { done = {} }
+local MAX_TRIES = 5
+local WAIT = 6
+local SMELT_COPPER = 2657
 local AutoNext
 
 local function PanelOpen()
@@ -237,15 +250,43 @@ local function PanelOpen()
   return GetUIPanel("left") or GetUIPanel("center") or GetUIPanel("doublewide") or GetUIPanel("fullscreen")
 end
 
-local function AutoFinish()
+-- Smelting may live on its own skill line, so Mining gets extra ids to try.
+local function OpenIds(skill)
+  local ids = { skill }
+  if skill == MINING and C_TradeSkillUI.GetTradeSkillLineForRecipe then
+    local ok, line, _, parent = pcall(C_TradeSkillUI.GetTradeSkillLineForRecipe, SMELT_COPPER)
+    if ok then
+      for _, id in ipairs({ parent, line }) do
+        if id and id ~= skill then ids[#ids + 1] = id end
+      end
+    end
+  end
+  return ids
+end
+
+local function AutoFinish(got)
   if auto.timer then
     auto.timer:Cancel()
     auto.timer = nil
   end
-  if not auto.skill then return end
-  auto.skill = nil
+  local job = auto.job
+  if not job then return end
+  auto.job = nil
   pcall(C_TradeSkillUI.CloseTradeSkill)
   tradeOpen = false
+  if got then
+    auto.ok[job.skill] = true
+    auto.read = true
+  elseif job.at < #job.ids then
+    job.at = job.at + 1
+    table.insert(auto.queue, 1, job)
+  else
+    -- Data can lag right after login; back off and try again.
+    local n = (auto.tries[job.skill] or 0) + 1
+    auto.tries[job.skill] = n
+    auto.retryAt[job.skill] = GetTime() + 30 * n
+    C_Timer.After(30 * n + 1, Crafts.AutoScan)
+  end
   C_Timer.After(0.5, function()
     local f = _G.ProfessionsFrame
     if f and auto.hidden then f:SetAlpha(1) end
@@ -261,6 +302,8 @@ end
 AutoNext = function()
   if not auto.queue or #auto.queue == 0 then
     auto.queue = nil
+    if auto.read and ZR.CraftSync then ZR.CraftSync.QueueVersion() end
+    auto.read = nil
     return
   end
   -- Never interrupt the player; try again a bit later.
@@ -268,33 +311,33 @@ AutoNext = function()
     C_Timer.After(15, AutoNext)
     return
   end
-  local skill = table.remove(auto.queue, 1)
-  auto.done[skill] = true
+  local job = table.remove(auto.queue, 1)
   if ProfessionsFrame_LoadUI and not _G.ProfessionsFrame then pcall(ProfessionsFrame_LoadUI) end
   local f = _G.ProfessionsFrame
   if f then
     f:SetAlpha(0)
     auto.hidden = true
   end
-  auto.sfx = GetCVar("Sound_EnableSFX")
+  auto.sfx = auto.sfx or GetCVar("Sound_EnableSFX")
   SetCVar("Sound_EnableSFX", "0")
-  auto.skill = skill
-  -- Some clients skip the list update when data is already loaded.
-  auto.timer = C_Timer.NewTimer(3, function()
+  auto.job = job
+  auto.timer = C_Timer.NewTimer(WAIT, function()
     auto.timer = nil
-    Scan(true)
-    AutoFinish()
+    AutoFinish(Scan(true) == job.skill)
   end)
-  local ok, opened = pcall(C_TradeSkillUI.OpenTradeSkill, skill)
-  if not ok or opened == false then AutoFinish() end
+  local ok, opened = pcall(C_TradeSkillUI.OpenTradeSkill, job.ids[job.at])
+  if not ok or opened == false then AutoFinish(false) end
 end
 
 function Crafts.AutoScan()
   if auto.queue or not C_TradeSkillUI.OpenTradeSkill or not Crafts.Store() then return end
   local rec = Crafts.Get(ZR.PlayerName())
-  local list = {}
+  local list, now = {}, GetTime()
   for skill in pairs(rec and rec.p or {}) do
-    if Crafts.HasRecipes(skill) and not auto.done[skill] then list[#list + 1] = skill end
+    if Crafts.HasRecipes(skill) and not auto.ok[skill] and (auto.tries[skill] or 0) < MAX_TRIES
+      and (auto.retryAt[skill] or 0) <= now then
+      list[#list + 1] = { skill = skill, ids = OpenIds(skill), at = 1 }
+    end
   end
   if #list == 0 then return end
   auto.queue = list
@@ -303,16 +346,16 @@ end
 
 ZR.RegisterEvent("TRADE_SKILL_SHOW", function()
   tradeOpen = true
-  if auto.skill then return end
+  if auto.job then return end
   if auto.hidden and _G.ProfessionsFrame then _G.ProfessionsFrame:SetAlpha(1) end
   ScheduleScan(1)
 end)
 ZR.RegisterEvent("TRADE_SKILL_CLOSE", function() tradeOpen = false end)
 ZR.RegisterEvent("TRADE_SKILL_LIST_UPDATE", function()
-  if auto.skill then
+  if auto.job then
     if C_TradeSkillUI.IsDataSourceChanging and C_TradeSkillUI.IsDataSourceChanging() then return end
-    Scan(true)
-    AutoFinish()
+    -- Keep waiting until the list really holds this profession.
+    if Scan(true) == auto.job.skill then AutoFinish(true) end
   elseif tradeOpen then
     ScheduleScan(0.5)
   end
@@ -445,7 +488,7 @@ function Crafts.RecipesOf(name, skill)
 end
 
 function Crafts.OwnHint()
-  if auto.skill or auto.queue then return "Reading your professions..." end
+  if auto.job or auto.queue then return "Reading your professions..." end
   local rec = Crafts.Get(ZR.PlayerName())
   for skill, p in pairs(rec and rec.p or {}) do
     if (p.t or 0) == 0 and Crafts.HasRecipes(skill) then

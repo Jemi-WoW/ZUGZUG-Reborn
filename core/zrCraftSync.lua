@@ -8,8 +8,9 @@ local PREFIX = "ZUGZUGCraft"
 local PROTO = "1"
 local BURST = 6
 local MAX_QUEUE = 800
-local CHUNK = 190
+local MAX_LEN = 250
 local ASK_AGAIN = 60
+local HEARTBEAT = 900
 
 local queue, tokens = {}, BURST
 local asked, receiving, responding, partial = {}, {}, {}, {}
@@ -83,10 +84,12 @@ end
 local function QueueData(name, skill)
   local p = Crafts().GetProf(name, skill)
   if not p or (p.t or 0) == 0 then return end
+  -- Long names leave less room, so size chunks off the real header.
+  local room = MAX_LEN - #Join("PD", name, skill, p.t, p.r or 0, p.m or 0, 99, 99, "")
   local chunks, buf, len = {}, {}, 0
   for recipe, item in pairs(p.l or {}) do
     local pair = B36(recipe) .. ":" .. B36(item)
-    if len + #pair + 1 > CHUNK then
+    if len + #pair + 1 > room then
       chunks[#chunks + 1] = table.concat(buf, ",")
       buf, len = {}, 0
     end
@@ -325,8 +328,9 @@ end
 function CS.Hello()
   if not IsInGuild() or not Crafts().Store() then return end
   Crafts().UpdateOwn()
-  local store = Crafts().Store()
-  for name in pairs(MyChars()) do
+  local store, names = Crafts().Store(), MyChars()
+  names[ZR.PlayerName()] = true
+  for name in pairs(names) do
     if store[name] then Queue(VersionMsg(name)) end
   end
   Queue(Join("PQ"))
@@ -342,6 +346,10 @@ function CS.Init()
   end
   ZR.RegisterEvent("CHAT_MSG_ADDON", OnMessage)
   C_Timer.NewTicker(1, Pump)
+  -- Anyone who missed an update catches up on the next beat.
+  C_Timer.NewTicker(HEARTBEAT, function()
+    if IsInGuild() and Crafts().Store() then Queue(VersionMsg(ZR.PlayerName())) end
+  end)
 end
 
 ZR.On("GuildReady", function()

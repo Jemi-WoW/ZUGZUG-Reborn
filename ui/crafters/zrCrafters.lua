@@ -13,7 +13,14 @@ local view, items, members, recipes
 local state = { search = "", cat = nil, prof = nil, item = nil, member = nil, memberSkill = nil }
 local dirty = true
 local pendingSearch
-local Update
+local Update, Back
+
+-- The mouse side button steps back, like a browser.
+local function MouseBack(button)
+  if button ~= "Button4" then return false end
+  Back()
+  return true
+end
 
 local itemSort = { key = "name", asc = true }
 local memberSort = { key = "online", asc = true }
@@ -243,7 +250,9 @@ local function InitItemRow(row, e)
     row.Crafters:SetPoint("RIGHT", -4, 0)
     row:SetScript("OnEnter", ItemTooltip)
     row:SetScript("OnLeave", GameTooltip_Hide)
-    row:SetScript("OnClick", function(self)
+    row:RegisterForClicks("LeftButtonUp", "Button4Up")
+    row:SetScript("OnClick", function(self, button)
+      if MouseBack(button) then return end
       if IsModifiedClick("CHATLINK") then
         InsertLink(LinkOf(self.data))
         return
@@ -314,7 +323,9 @@ local function InitMemberRow(row, d)
     row.Updated:SetPoint("RIGHT", row.Whisper, "LEFT", -6, 0)
     row:SetScript("OnEnter", MemberTooltip)
     row:SetScript("OnLeave", GameTooltip_Hide)
-    row:SetScript("OnClick", function(self)
+    row:RegisterForClicks("LeftButtonUp", "Button4Up")
+    row:SetScript("OnClick", function(self, button)
+      if MouseBack(button) then return end
       if Crafts.HasRecipes(self.data.skill) then OpenMember(self.data) end
     end)
   end
@@ -353,12 +364,18 @@ local function InitRecipeRow(row, e)
     row.Name = UI.CreateCell(row)
     row.Name:SetPoint("LEFT", 24, 0)
     row.Name:SetWidth(RECIPE_COLUMNS[1].width - 28)
+    row.Whisper = UI.CreateButton(row, WHISPER or "Whisper", 72, 18)
+    row.Whisper:SetPoint("RIGHT", -2, 0)
+    row.Whisper:SetScript("OnClick", function(self) Whisper(state.member, self:GetParent().data) end)
+    UI.SetButtonTooltip(row.Whisper, function() return "Whisper", "Opens a whisper with the item linked." end)
     row.Type = UI.CreateCell(row)
     row.Type:SetPoint("LEFT", ColumnX(RECIPE_COLUMNS, 2) + 6, 0)
-    row.Type:SetPoint("RIGHT", -4, 0)
+    row.Type:SetPoint("RIGHT", row.Whisper, "LEFT", -6, 0)
     row:SetScript("OnEnter", RecipeTooltip)
     row:SetScript("OnLeave", GameTooltip_Hide)
-    row:SetScript("OnClick", function(self)
+    row:RegisterForClicks("LeftButtonUp", "Button4Up")
+    row:SetScript("OnClick", function(self, button)
+      if MouseBack(button) then return end
       if IsModifiedClick("CHATLINK") then InsertLink(LinkOf(self.data)) end
     end)
   end
@@ -367,6 +384,7 @@ local function InitRecipeRow(row, e)
   row.Name:SetText(Crafts.Name(e) or (RETRIEVING_ITEM_INFO or "Loading..."))
   SetQualityColor(row.Name, e)
   row.Type:SetText(TypeText(e))
+  row.Whisper:SetEnabled(state.member ~= ZR.PlayerName())
 end
 
 local function ItemRows()
@@ -462,6 +480,9 @@ Update = function()
   view.Empty:SetShown(#rows == 0 and empty ~= nil)
   view.Crumb:SetText(crumb .. (count and ("  |cff888888-  " .. count .. "|r") or ""))
   view.Back:SetEnabled(state.member ~= nil or state.item ~= nil or state.prof ~= nil)
+  local canWhisper = mode == "recipes" and state.member ~= ZR.PlayerName()
+  view.Whisper:SetShown(canWhisper)
+  view.Status:SetPoint("RIGHT", canWhisper and view.Whisper or view.Back, "LEFT", -10, 0)
   if ZR.CraftSync.Busy() then
     view.Status:SetText("|cffffd100Syncing guild recipes...|r")
   else
@@ -473,7 +494,7 @@ local function MarkDirty()
   dirty = true
 end
 
-local function Back()
+Back = function()
   if state.member then
     state.member, state.memberSkill = nil, nil
   elseif state.item then
@@ -548,6 +569,8 @@ end
 function UI.BuildCrafters(parent, inset)
   view = CreateFrame("Frame", nil, parent)
   view:SetAllPoints(parent)
+  view:EnableMouse(true)
+  view:SetScript("OnMouseUp", function(_, button) MouseBack(button) end)
 
   view.Search = CreateFrame("EditBox", nil, view, "SearchBoxTemplate")
   view.Search:SetSize(180, 20)
@@ -568,7 +591,7 @@ function UI.BuildCrafters(parent, inset)
 
   items = UI.CreateTable(view, ITEM_COLUMNS, nil, 20, InitItemRow)
   members = UI.CreateTable(view, MEMBER_COLUMNS, { title = "", width = 80 }, 20, InitMemberRow)
-  recipes = UI.CreateTable(view, RECIPE_COLUMNS, nil, 20, InitRecipeRow)
+  recipes = UI.CreateTable(view, RECIPE_COLUMNS, { title = "", width = 80 }, 20, InitRecipeRow)
   for _, t in ipairs({ items, members, recipes }) do
     t:SetPoint("TOPLEFT", view.Categories, "TOPRIGHT", 6, -2)
     t:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -6, 6)
@@ -586,13 +609,18 @@ function UI.BuildCrafters(parent, inset)
   view.Back:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -3, 3)
   view.Back:SetScript("OnClick", Back)
 
+  view.Whisper = UI.CreateButton(view, WHISPER or "Whisper", 90, 20)
+  view.Whisper:SetPoint("RIGHT", view.Back, "LEFT", -4, 0)
+  view.Whisper:SetScript("OnClick", function() Whisper(state.member) end)
+  UI.SetButtonTooltip(view.Whisper, function() return "Whisper", "Opens a whisper to " .. (state.member or "them") .. "." end)
+
   view.Crumb = UI.Text(view, "GameFontHighlightSmall")
   view.Crumb:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 8, 7)
   view.Crumb:SetJustifyH("LEFT")
   view.Crumb:SetWordWrap(false)
 
   view.Status = UI.Text(view, "GameFontHighlightSmall")
-  view.Status:SetPoint("RIGHT", view.Back, "LEFT", -10, 0)
+  view.Status:SetPoint("RIGHT", view.Whisper, "LEFT", -10, 0)
   view.Status:SetPoint("LEFT", view.Crumb, "RIGHT", 16, 0)
   view.Status:SetJustifyH("RIGHT")
   view.Status:SetWordWrap(false)
