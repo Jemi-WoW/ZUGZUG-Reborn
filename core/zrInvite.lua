@@ -35,10 +35,8 @@ local function CopyBox()
   })
   f.Title = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
   f.Title:SetPoint("TOP", 0, -18)
-  f.Title:SetText("Guild invite")
   f.Hint = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
   f.Hint:SetPoint("TOP", f.Title, "BOTTOM", 0, -6)
-  f.Hint:SetText("Ctrl+C, then Enter, Ctrl+V, Enter")
   f.Edit = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
   f.Edit:SetSize(280, 22)
   f.Edit:SetPoint("TOP", f.Hint, "BOTTOM", 0, -8)
@@ -61,13 +59,19 @@ local function CopyBox()
   return f
 end
 
-function Invite.ShowCopyBox(name)
+function ZR.ShowCopyBox(title, hint, text)
   local f = CopyBox()
-  f.command = "/ginvite " .. name
-  f.Edit:SetText(f.command)
+  f.Title:SetText(title)
+  f.Hint:SetText(hint)
+  f.command = text
+  f.Edit:SetText(text)
   f:Show()
   f.Edit:SetFocus()
   f.Edit:HighlightText()
+end
+
+function Invite.ShowCopyBox(name)
+  ZR.ShowCopyBox("Guild invite", "Ctrl+C, then Enter, Ctrl+V, Enter", "/ginvite " .. name)
 end
 
 -- Addons cannot invite on Forever, so the user sends the command themselves.

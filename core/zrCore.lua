@@ -7,6 +7,7 @@ ZR.ADDON = ADDON
 ZR.TITLE = "ZUGZUG Reborn"
 ZR.ICON_TEXTURE = "Interface\\AddOns\\ZUGZUG-Reborn\\externals\\img\\ZUGZUGRebornIcon.tga"
 ZR.SYNC_PREFIX = "ZUGZUGReborn"
+ZR.DISCORD_URL = "https://discord.gg/Vg7npmWaxf"
 
 BINDING_HEADER_ZUGZUGREBORN = "ZUGZUG Reborn"
 BINDING_NAME_ZUGZUGREBORN_SCAN = "Fast Invite: scan next"

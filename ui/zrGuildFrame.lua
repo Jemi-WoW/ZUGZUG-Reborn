@@ -8,7 +8,7 @@ UI.features = {}
 local BLIZZ_TABS = { "ChatTab", "RosterTab", "GuildBenefitsTab", "GuildInfoTab", "GuildPreferredPlaySettingsTab" }
 local ROCK = "Interface\\FrameGeneral\\UI-Background-Rock"
 
-local cf, under, page, sideTab
+local cf, under, page, sideTab, discord
 local currentKey
 local openAfterCombat
 
@@ -289,11 +289,32 @@ local function BuildSideTab()
   sideTab:Hide()
 end
 
+-- The minimized title bar has no room for it.
+local function UpdateDiscord()
+  discord:SetShown(cf:GetDisplayMode() ~= COMMUNITIES_FRAME_DISPLAY_MODES.MINIMIZED)
+end
+
+local function BuildDiscordButton()
+  discord = UI.CreateButton(cf, "Join Discord", 100, 18)
+  discord:SetPoint("RIGHT", cf.MaximizeMinimizeFrame, "LEFT", -4, 0)
+  -- The title bar art would otherwise cover it.
+  discord:SetFrameLevel(cf.MaximizeMinimizeFrame:GetFrameLevel())
+  discord:SetScript("OnClick", function()
+    PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+    ZR.ShowCopyBox("ZUGZUG Discord", "Ctrl+C, then paste it in your browser", ZR.DISCORD_URL)
+  end)
+  UI.SetButtonTooltip(discord, function()
+    return "Join our Discord", "Addons cannot open your browser, so this gives you the link to copy."
+  end)
+  UpdateDiscord()
+end
+
 local function Setup()
   if cf then return end
   cf = CommunitiesFrame
   if not cf then return end
   BuildSideTab()
+  BuildDiscordButton()
 
   hooksecurefunc(cf, "UpdateCommunitiesTabs", function(self)
     local show = self.ChatTab:IsShown() and IsGuildClub(self:GetSelectedClubId())
@@ -307,7 +328,10 @@ local function Setup()
   for _, key in ipairs(BLIZZ_TABS) do
     if cf[key] then cf[key]:HookScript("OnClick", function() GF.HidePage(true) end) end
   end
-  cf:RegisterCallback(CommunitiesFrameMixin.Event.DisplayModeChanged, function() GF.HidePage(false) end, GF)
+  cf:RegisterCallback(CommunitiesFrameMixin.Event.DisplayModeChanged, function()
+    GF.HidePage(false)
+    UpdateDiscord()
+  end, GF)
   cf:RegisterCallback(CommunitiesFrameMixin.Event.ClubSelected, function(_, clubId)
     if not IsGuildClub(clubId) then GF.HidePage(true) end
   end, GF)
