@@ -243,6 +243,8 @@ end
 local MAX_TRIES = 5
 local WAIT = 6
 local SMELT_COPPER = 2657
+-- The professions window open and close sounds, so nothing else goes quiet.
+local WINDOW_SOUNDS = { 567507, 567433 }
 local AutoNext
 
 local function PanelOpen()
@@ -262,6 +264,12 @@ local function OpenIds(skill)
     end
   end
   return ids
+end
+
+local function MuteWindow(mute)
+  local fn = mute and MuteSoundFile or UnmuteSoundFile
+  if not fn then return end
+  for _, id in ipairs(WINDOW_SOUNDS) do pcall(fn, id) end
 end
 
 local function AutoFinish(got)
@@ -291,10 +299,7 @@ local function AutoFinish(got)
     local f = _G.ProfessionsFrame
     if f and auto.hidden then f:SetAlpha(1) end
     auto.hidden = nil
-    if auto.sfx then
-      SetCVar("Sound_EnableSFX", auto.sfx)
-      auto.sfx = nil
-    end
+    MuteWindow(false)
     AutoNext()
   end)
 end
@@ -318,8 +323,7 @@ AutoNext = function()
     f:SetAlpha(0)
     auto.hidden = true
   end
-  auto.sfx = auto.sfx or GetCVar("Sound_EnableSFX")
-  SetCVar("Sound_EnableSFX", "0")
+  MuteWindow(true)
   auto.job = job
   auto.timer = C_Timer.NewTimer(WAIT, function()
     auto.timer = nil
@@ -361,10 +365,6 @@ ZR.RegisterEvent("TRADE_SKILL_LIST_UPDATE", function()
   end
 end)
 
--- Never leave sound effects muted, even on a logout mid-scan.
-ZR.RegisterEvent("PLAYER_LOGOUT", function()
-  if auto.sfx then SetCVar("Sound_EnableSFX", auto.sfx) end
-end)
 ZR.RegisterEvent("TRADE_SKILL_DATA_SOURCE_CHANGED", function()
   if tradeOpen then ScheduleScan(0.5) end
 end)
