@@ -9,8 +9,8 @@ local DOT_OFF = "Interface\\FriendsFrame\\StatusIcon-Offline"
 local QUESTION_MARK = 134400
 local SEP = "  |cff888888>|r  "
 
-local view, items, members, recipes
-local state = { search = "", cat = nil, prof = nil, item = nil, member = nil, memberSkill = nil }
+local view, items, members, recipes, roster
+local state = { search = "", cat = nil, prof = nil, item = nil, member = nil, memberSkill = nil, roster = true }
 local dirty = true
 local pendingSearch
 local Update, Back
@@ -25,6 +25,7 @@ end
 local itemSort = { key = "name", asc = true }
 local memberSort = { key = "online", asc = true }
 local recipeSort = { key = "name", asc = true }
+local rosterSort = { key = "online", asc = true }
 
 local ITEM_COLUMNS = {
   { title = "Item", width = 270, key = "name" },
@@ -37,6 +38,12 @@ local MEMBER_COLUMNS = {
   { title = "Recipes", width = 64, key = "recipes" },
   { title = "Last online", width = 96, key = "online" },
   { title = "Updated", width = 0, key = "updated" },
+}
+local PROF_SLOTS, SLOT_WIDTH = 3, 80
+local ROSTER_COLUMNS = {
+  { title = NAME or "Name", width = 170, key = "name" },
+  { title = "Professions", width = PROF_SLOTS * SLOT_WIDTH + 10, key = "profs" },
+  { title = "Last online", width = 0, key = "online" },
 }
 local RECIPE_COLUMNS = {
   { title = "Item", width = 300, key = "name" },
@@ -217,6 +224,11 @@ local function MemberValue(d, key)
   return d.name:lower()
 end
 
+local function RosterValue(d, key)
+  if key == "profs" then return d.profText end
+  return MemberValue(d, key)
+end
+
 local function MemberData(name, skill)
   local on, seen = Presence(name)
   local info = ZR.RosterInfo(name)
@@ -229,6 +241,7 @@ end
 local function Mode()
   if state.member then return "recipes" end
   if state.item then return "crafters" end
+  if state.roster then return "roster" end
   if state.prof and state.search == "" and not state.cat then return "members" end
   return "items"
 end
@@ -274,10 +287,8 @@ local function InitItemRow(row, e)
   row.Crafters:SetText(CraftersText(e))
 end
 
-local function MemberTooltip(row)
-  local d = row.data
-  if not d then return end
-  GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+local function ShowMemberTooltip(owner, d)
+  GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
   GameTooltip_SetTitle(GameTooltip, Dot(d.on) .. " " .. ZR.ColorName(d.name, d.class))
   GameTooltip:AddDoubleLine(Crafts.ProfName(d.skill), SkillText(d.p), 1, 0.82, 0, 1, 1, 1)
   if Crafts.HasRecipes(d.skill) then
@@ -291,6 +302,10 @@ local function MemberTooltip(row)
     end
   end
   GameTooltip:Show()
+end
+
+local function MemberTooltip(row)
+  if row.data then ShowMemberTooltip(row, row.data) end
 end
 
 local function InitMemberRow(row, d)
@@ -360,6 +375,102 @@ local function InitMemberRow(row, d)
   row.Whisper:SetEnabled(d.name ~= ZR.PlayerName())
 end
 
+local function RosterTooltip(row)
+  local d = row.data
+  if not d then return end
+  GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+  GameTooltip_SetTitle(GameTooltip, Dot(d.on) .. " " .. ZR.ColorName(d.name, d.class))
+  for _, prof in ipairs(d.profs) do
+    GameTooltip:AddDoubleLine(Crafts.ProfName(prof.id), SkillText(Crafts.GetProf(d.name, prof.id)), 1, 0.82, 0, 1, 1, 1)
+  end
+  GameTooltip:AddLine(" ")
+  GameTooltip:AddLine("Click a profession to see everything they can make.", 0.6, 0.6, 0.6)
+  GameTooltip:Show()
+end
+
+local function OpenSlot(self, button)
+  if MouseBack(button) then return end
+  local d = self:GetParent().data
+  if Crafts.HasRecipes(self.prof.id) then OpenMember(MemberData(d.name, self.prof.id)) end
+end
+
+local function SlotTooltip(self)
+  ShowMemberTooltip(self, MemberData(self:GetParent().data.name, self.prof.id))
+end
+
+local function CreateSlot(row, i)
+  local s = CreateFrame("Button", nil, row)
+  s:SetSize(SLOT_WIDTH - 4, 18)
+  s:SetPoint("LEFT", ColumnX(ROSTER_COLUMNS, 2) + 4 + (i - 1) * SLOT_WIDTH, 0)
+  s:SetHighlightTexture("Interface\\FriendsFrame\\UI-FriendsFrame-HighlightBar", "ADD")
+  s.Icon = s:CreateTexture(nil, "ARTWORK")
+  s.Icon:SetSize(16, 16)
+  s.Icon:SetPoint("LEFT", 2, 0)
+  s.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+  s.Text = UI.CreateCell(s)
+  s.Text:SetPoint("LEFT", s.Icon, "RIGHT", 4, 0)
+  s.Text:SetPoint("RIGHT", -2, 0)
+  s:RegisterForClicks("LeftButtonUp", "Button4Up")
+  s:SetScript("OnClick", OpenSlot)
+  s:SetScript("OnEnter", SlotTooltip)
+  s:SetScript("OnLeave", GameTooltip_Hide)
+  return s
+end
+
+local function InitRosterRow(row, d)
+  if not row.Name then
+    UI.StyleRow(row)
+    row.Dot = row:CreateTexture(nil, "ARTWORK")
+    row.Dot:SetSize(14, 14)
+    row.Dot:SetPoint("LEFT", 4, 0)
+    row.Class = row:CreateTexture(nil, "ARTWORK")
+    row.Class:SetSize(16, 16)
+    row.Class:SetPoint("LEFT", 20, 0)
+    row.Name = UI.CreateCell(row)
+    row.Name:SetPoint("LEFT", 40, 0)
+    row.Name:SetWidth(ROSTER_COLUMNS[1].width - 44)
+    row.Slots = {}
+    for i = 1, PROF_SLOTS do row.Slots[i] = CreateSlot(row, i) end
+    row.Whisper = UI.CreateButton(row, WHISPER or "Whisper", 72, 18)
+    row.Whisper:SetPoint("RIGHT", -2, 0)
+    row.Whisper:SetScript("OnClick", function(self) Whisper(self:GetParent().data.name) end)
+    UI.SetButtonTooltip(row.Whisper, function() return "Whisper", "Opens a whisper to them." end)
+    row.Seen = UI.CreateCell(row)
+    row.Seen:SetPoint("LEFT", ColumnX(ROSTER_COLUMNS, 3) + 6, 0)
+    row.Seen:SetPoint("RIGHT", row.Whisper, "LEFT", -6, 0)
+    row:SetScript("OnEnter", RosterTooltip)
+    row:SetScript("OnLeave", GameTooltip_Hide)
+    row:RegisterForClicks("LeftButtonUp", "Button4Up")
+    row:SetScript("OnClick", function(self, button)
+      if MouseBack(button) then return end
+      for _, prof in ipairs(self.data.profs) do
+        if Crafts.HasRecipes(prof.id) then return OpenMember(MemberData(self.data.name, prof.id)) end
+      end
+    end)
+  end
+  row.data = d
+  row.Dot:SetTexture(d.on and DOT_ON or DOT_OFF)
+  if d.class then
+    row.Class:SetAtlas("classicon-" .. d.class:lower())
+    row.Class:Show()
+  else
+    row.Class:Hide()
+  end
+  row.Name:SetText(ZR.ColorName(d.name, d.class))
+  for i, s in ipairs(row.Slots) do
+    local prof = d.profs[i]
+    s.prof = prof
+    s:SetShown(prof ~= nil)
+    if prof then
+      s.Icon:SetTexture(prof.icon)
+      s.Text:SetText(SkillText(Crafts.GetProf(d.name, prof.id)))
+    end
+  end
+  row.Seen:SetText(d.seen)
+  if d.on then row.Seen:SetTextColor(0.25, 1, 0.25) else row.Seen:SetTextColor(0.7, 0.7, 0.7) end
+  row.Whisper:SetEnabled(d.name ~= ZR.PlayerName())
+end
+
 local function InitRecipeRow(row, e)
   if not row.Name then
     UI.StyleRow(row)
@@ -412,6 +523,28 @@ local function MemberRows()
   return rows
 end
 
+local function RosterRows()
+  local rows = {}
+  for name, rec in pairs(Crafts.Store() or {}) do
+    if Crafts.Visible(name) and name:lower():find(state.search, 1, true) then
+      local profs, names = {}, {}
+      for _, prof in ipairs(Crafts.PROFESSIONS) do
+        if rec.p and rec.p[prof.id] then
+          profs[#profs + 1] = prof
+          names[#names + 1] = Crafts.ProfName(prof.id)
+        end
+      end
+      if #profs > 0 then
+        local d = MemberData(name)
+        d.profs, d.profText = profs, table.concat(names, " ")
+        rows[#rows + 1] = d
+      end
+    end
+  end
+  Sort(rows, rosterSort, RosterValue, function(d) return d.name end)
+  return rows
+end
+
 local function RecipeRows()
   local rows = {}
   for _, e in ipairs(Crafts.RecipesOf(state.member, state.memberSkill)) do
@@ -446,6 +579,9 @@ Update = function()
   items:SetShown(mode == "items")
   members:SetShown(mode == "members" or mode == "crafters")
   recipes:SetShown(mode == "recipes")
+  roster:SetShown(mode == "roster")
+  view.Members:SetText(state.roster and "All Items" or "Members")
+  if view.Search.Instructions then view.Search.Instructions:SetText(state.roster and "Search members" or "Search items") end
   local onItem = mode == "crafters" and state.item ~= nil
   view.ItemBar:SetShown(onItem)
   members:SetPoint("TOPLEFT", view.Categories, "TOPRIGHT", 6, onItem and -34 or -2)
@@ -472,6 +608,12 @@ Update = function()
     members:SetRows(rows)
     crumb = (state.prof and (Crafts.ProfName(state.prof) .. SEP) or "") .. (Crafts.Name(state.item) or "")
     count = Plural(#rows, "crafter")
+  elseif mode == "roster" then
+    rows = RosterRows()
+    roster:SetRows(rows)
+    crumb = "Guild members"
+    count = Plural(#rows, "member")
+    empty = state.search ~= "" and "Nobody matches your search." or "Nobody in your guild has shared a profession yet."
   elseif mode == "members" then
     rows = MemberRows()
     members:SetRows(rows)
@@ -494,7 +636,7 @@ Update = function()
   view.Empty:SetText(empty or "")
   view.Empty:SetShown(#rows == 0 and empty ~= nil)
   view.Crumb:SetText(crumb .. (count and ("  |cff888888-  " .. count .. "|r") or ""))
-  view.Back:SetEnabled(state.member ~= nil or state.item ~= nil or state.prof ~= nil)
+  view.Back:SetEnabled(state.member ~= nil or state.item ~= nil or state.prof ~= nil or not state.roster)
   local canWhisper = mode == "recipes" and state.member ~= ZR.PlayerName()
   view.Whisper:SetShown(canWhisper)
   view.Status:SetPoint("RIGHT", canWhisper and view.Whisper or view.Back, "LEFT", -10, 0)
@@ -514,8 +656,9 @@ Back = function()
     state.member, state.memberSkill = nil, nil
   elseif state.item then
     state.item = nil
-  elseif state.prof then
-    state.prof = nil
+  else
+    -- The members list is home, everything else steps back to it.
+    state.prof, state.roster = nil, true
   end
   Update()
 end
@@ -527,6 +670,7 @@ local function SetSearch(text)
 end
 
 function UI.CraftersSearch(text)
+  state.roster = nil
   if view then
     view.Search:SetText(text or "")
     SetSearch(text)
@@ -558,6 +702,7 @@ local function BuildProfButtons(anchor)
       PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
       state.prof = state.prof ~= self.prof.id and self.prof.id or nil
       state.item, state.member, state.memberSkill = nil, nil, nil
+      state.roster = state.prof == nil or nil
       Update()
     end)
     b:SetScript("OnEnter", function(self)
@@ -601,9 +746,24 @@ function UI.BuildCrafters(parent, inset)
 
   BuildProfButtons(view.Search)
 
+  view.Members = UI.CreateButton(view, "Members", 100, 22)
+  view.Members:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -8, -7)
+  view.Members:SetScript("OnClick", function()
+    PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+    state.roster = not state.roster or nil
+    state.prof, state.item, state.member, state.memberSkill = nil, nil, nil, nil
+    -- Item names would hide everyone, and member names would hide every item.
+    view.Search:SetText("")
+    Update()
+  end)
+  UI.SetButtonTooltip(view.Members, function()
+    if state.roster then return "All Items", "Back to every item the guild can craft." end
+    return "Members", "Everyone in the guild with a profession, and which ones they have."
+  end)
+
   view.Categories = UI.CreateCategoryList(view, function(node)
     state.cat = node
-    state.item = nil
+    state.item, state.roster = nil, nil
     Update()
   end)
   view.Categories:SetPoint("TOPLEFT", inset, "TOPLEFT", 4, -34)
@@ -612,7 +772,8 @@ function UI.BuildCrafters(parent, inset)
   items = UI.CreateTable(view, ITEM_COLUMNS, nil, 20, InitItemRow)
   members = UI.CreateTable(view, MEMBER_COLUMNS, { title = "", width = 80 }, 20, InitMemberRow)
   recipes = UI.CreateTable(view, RECIPE_COLUMNS, { title = "", width = 80 }, 20, InitRecipeRow)
-  for _, t in ipairs({ items, members, recipes }) do
+  roster = UI.CreateTable(view, ROSTER_COLUMNS, { title = "", width = 80 }, 20, InitRosterRow)
+  for _, t in ipairs({ items, members, recipes, roster }) do
     t:SetPoint("TOPLEFT", view.Categories, "TOPRIGHT", 6, -2)
     t:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -6, 6)
   end
@@ -642,6 +803,7 @@ function UI.BuildCrafters(parent, inset)
   items.Header.sortingFunction = Sorter(itemSort, ITEM_COLUMNS)
   members.Header.sortingFunction = Sorter(memberSort, MEMBER_COLUMNS)
   recipes.Header.sortingFunction = Sorter(recipeSort, RECIPE_COLUMNS)
+  roster.Header.sortingFunction = Sorter(rosterSort, ROSTER_COLUMNS)
 
   view.Empty = UI.Text(view, "GameFontDisable")
   view.Empty:SetPoint("CENTER", items, "CENTER", 0, -10)
