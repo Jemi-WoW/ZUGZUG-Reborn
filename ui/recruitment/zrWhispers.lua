@@ -83,6 +83,29 @@ local function UpdateList()
   local list = Inbox.Sorted()
   view.List:SetRows(list)
   view.NoThreads:SetShown(#list == 0)
+  view.DeleteAllButton:SetEnabled(#list > 0)
+end
+
+local DELETE_ALL = "Delete All"
+local armed
+
+local function Disarm()
+  armed = nil
+  if view then view.DeleteAllButton:SetText(DELETE_ALL) end
+end
+
+-- Second click within a few seconds confirms, so one misclick can't wipe every conversation.
+local function DeleteAll(self)
+  if not armed then
+    local token = {}
+    armed = token
+    self:SetText("Sure?")
+    C_Timer.After(3, function() if armed == token then Disarm() end end)
+    return
+  end
+  Disarm()
+  Inbox.DeleteAll()
+  ShowThread()
 end
 
 local function SendReply()
@@ -108,6 +131,10 @@ function UI.BuildWhispers(parent, inset)
 
   view.NoThreads = UI.Text(listBox, "GameFontDisable", "No whispers yet.")
   view.NoThreads:SetPoint("CENTER")
+
+  view.DeleteAllButton = UI.CreateButton(view, DELETE_ALL, 80, 20)
+  view.DeleteAllButton:SetPoint("BOTTOMRIGHT", listBox, "TOPRIGHT", 0, 1)
+  view.DeleteAllButton:SetScript("OnClick", DeleteAll)
 
   view.ThreadBox = UI.CreateBox(view, "Conversation")
   view.ThreadBox:SetPoint("TOPLEFT", listBox, "TOPRIGHT", 14, 0)
@@ -161,6 +188,7 @@ function UI.BuildWhispers(parent, inset)
   view:SetScript("OnHide", function()
     Inbox.viewing = false
     view.Reply:ClearFocus()
+    Disarm()
   end)
 
   ZR.On("InboxChanged", function(name)

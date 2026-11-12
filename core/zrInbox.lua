@@ -68,6 +68,12 @@ function Inbox.Delete(name)
   ZR.Fire("InboxChanged", name)
 end
 
+function Inbox.DeleteAll()
+  wipe(Threads())
+  Inbox.openThread = nil
+  ZR.Fire("InboxChanged")
+end
+
 -- Click or Enter only; whispers need a hardware event on Forever.
 function Inbox.Send(name, text)
   text = ZR.CleanChat(text)
