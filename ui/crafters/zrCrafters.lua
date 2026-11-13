@@ -39,10 +39,11 @@ local MEMBER_COLUMNS = {
   { title = "Last online", width = 96, key = "online" },
   { title = "Updated", width = 0, key = "updated" },
 }
-local PROF_SLOTS, SLOT_WIDTH = 3, 80
+local PRIMARY_SLOTS, PRIMARY_WIDTH, SECONDARY_WIDTH = 2, 80, 80
 local ROSTER_COLUMNS = {
   { title = NAME or "Name", width = 170, key = "name" },
-  { title = "Professions", width = PROF_SLOTS * SLOT_WIDTH + 10, key = "profs" },
+  { title = "Professions", width = PRIMARY_SLOTS * PRIMARY_WIDTH + 8, key = "profs" },
+  { title = "Secondary", width = #Crafts.SECONDARY * SECONDARY_WIDTH + 8 },
   { title = "Last online", width = 0, key = "online" },
 }
 local RECIPE_COLUMNS = {
@@ -375,6 +376,19 @@ local function InitMemberRow(row, d)
   row.Whisper:SetEnabled(d.name ~= ZR.PlayerName())
 end
 
+-- No entry at all means their addon is too old to share it.
+local function SecondaryState(p)
+  if not p then return "Unknown", "Shows once they update ZUGZUG Reborn." end
+  if (p.m or 0) == 0 then return "Not learned" end
+  return SkillText(p)
+end
+
+local function FirstCraft(d)
+  for _, prof in ipairs(d.profs) do
+    if Crafts.HasRecipes(prof.id) then return prof end
+  end
+end
+
 local function RosterTooltip(row)
   local d = row.data
   if not d then return end
@@ -383,8 +397,14 @@ local function RosterTooltip(row)
   for _, prof in ipairs(d.profs) do
     GameTooltip:AddDoubleLine(Crafts.ProfName(prof.id), SkillText(Crafts.GetProf(d.name, prof.id)), 1, 0.82, 0, 1, 1, 1)
   end
-  GameTooltip:AddLine(" ")
-  GameTooltip:AddLine("Click a profession to see everything they can make.", 0.6, 0.6, 0.6)
+  for _, prof in ipairs(Crafts.SECONDARY) do
+    GameTooltip:AddDoubleLine(Crafts.ProfName(prof.id), (SecondaryState(Crafts.GetProf(d.name, prof.id))),
+      0.8, 0.8, 0.8, 1, 1, 1)
+  end
+  if FirstCraft(d) then
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Click a profession to see everything they can make.", 0.6, 0.6, 0.6)
+  end
   GameTooltip:Show()
 end
 
@@ -395,13 +415,20 @@ local function OpenSlot(self, button)
 end
 
 local function SlotTooltip(self)
-  ShowMemberTooltip(self, MemberData(self:GetParent().data.name, self.prof.id))
+  local name = self:GetParent().data.name
+  if not self.secondary then return ShowMemberTooltip(self, MemberData(name, self.prof.id)) end
+  local state, note = SecondaryState(Crafts.GetProf(name, self.prof.id))
+  GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+  GameTooltip_SetTitle(GameTooltip, Crafts.ProfName(self.prof.id))
+  GameTooltip:AddDoubleLine("Skill", state, 1, 0.82, 0, 1, 1, 1)
+  if note then GameTooltip:AddLine(note, 0.6, 0.6, 0.6, true) end
+  GameTooltip:Show()
 end
 
-local function CreateSlot(row, i)
+local function CreateSlot(row, x, width)
   local s = CreateFrame("Button", nil, row)
-  s:SetSize(SLOT_WIDTH - 4, 18)
-  s:SetPoint("LEFT", ColumnX(ROSTER_COLUMNS, 2) + 4 + (i - 1) * SLOT_WIDTH, 0)
+  s:SetSize(width - 4, 18)
+  s:SetPoint("LEFT", x, 0)
   s:SetHighlightTexture("Interface\\FriendsFrame\\UI-FriendsFrame-HighlightBar", "ADD")
   s.Icon = s:CreateTexture(nil, "ARTWORK")
   s.Icon:SetSize(16, 16)
@@ -429,23 +456,30 @@ local function InitRosterRow(row, d)
     row.Name = UI.CreateCell(row)
     row.Name:SetPoint("LEFT", 40, 0)
     row.Name:SetWidth(ROSTER_COLUMNS[1].width - 44)
-    row.Slots = {}
-    for i = 1, PROF_SLOTS do row.Slots[i] = CreateSlot(row, i) end
+    row.Slots, row.Secondary = {}, {}
+    for i = 1, PRIMARY_SLOTS do
+      row.Slots[i] = CreateSlot(row, ColumnX(ROSTER_COLUMNS, 2) + 4 + (i - 1) * PRIMARY_WIDTH, PRIMARY_WIDTH)
+    end
+    for i, prof in ipairs(Crafts.SECONDARY) do
+      local slot = CreateSlot(row, ColumnX(ROSTER_COLUMNS, 3) + 4 + (i - 1) * SECONDARY_WIDTH, SECONDARY_WIDTH)
+      slot.prof, slot.secondary = prof, true
+      slot.Icon:SetTexture(prof.icon)
+      row.Secondary[i] = slot
+    end
     row.Whisper = UI.CreateButton(row, WHISPER or "Whisper", 72, 18)
     row.Whisper:SetPoint("RIGHT", -2, 0)
     row.Whisper:SetScript("OnClick", function(self) Whisper(self:GetParent().data.name) end)
     UI.SetButtonTooltip(row.Whisper, function() return "Whisper", "Opens a whisper to them." end)
     row.Seen = UI.CreateCell(row)
-    row.Seen:SetPoint("LEFT", ColumnX(ROSTER_COLUMNS, 3) + 6, 0)
+    row.Seen:SetPoint("LEFT", ColumnX(ROSTER_COLUMNS, 4) + 6, 0)
     row.Seen:SetPoint("RIGHT", row.Whisper, "LEFT", -6, 0)
     row:SetScript("OnEnter", RosterTooltip)
     row:SetScript("OnLeave", GameTooltip_Hide)
     row:RegisterForClicks("LeftButtonUp", "Button4Up")
     row:SetScript("OnClick", function(self, button)
       if MouseBack(button) then return end
-      for _, prof in ipairs(self.data.profs) do
-        if Crafts.HasRecipes(prof.id) then return OpenMember(MemberData(self.data.name, prof.id)) end
-      end
+      local prof = FirstCraft(self.data)
+      if prof then OpenMember(MemberData(self.data.name, prof.id)) end
     end)
   end
   row.data = d
@@ -465,6 +499,13 @@ local function InitRosterRow(row, d)
       s.Icon:SetTexture(prof.icon)
       s.Text:SetText(SkillText(Crafts.GetProf(d.name, prof.id)))
     end
+  end
+  for _, s in ipairs(row.Secondary) do
+    local p = Crafts.GetProf(d.name, s.prof.id)
+    local learned = p and (p.m or 0) > 0
+    s.Icon:SetDesaturated(not learned)
+    s.Icon:SetAlpha(learned and 1 or 0.35)
+    s.Text:SetText(learned and SkillText(p) or (p and "|cff666666-|r" or "|cff666666?|r"))
   end
   row.Seen:SetText(d.seen)
   if d.on then row.Seen:SetTextColor(0.25, 1, 0.25) else row.Seen:SetTextColor(0.7, 0.7, 0.7) end
@@ -534,7 +575,7 @@ local function RosterRows()
           names[#names + 1] = Crafts.ProfName(prof.id)
         end
       end
-      if #profs > 0 then
+      if next(rec.p or {}) then
         local d = MemberData(name)
         d.profs, d.profText = profs, table.concat(names, " ")
         rows[#rows + 1] = d
@@ -580,6 +621,9 @@ Update = function()
   members:SetShown(mode == "members" or mode == "crafters")
   recipes:SetShown(mode == "recipes")
   roster:SetShown(mode == "roster")
+  -- Categories only filter items, so the members list takes their space.
+  view.Categories:SetShown(mode ~= "roster")
+  view.Empty:SetPoint("CENTER", mode == "roster" and roster or items, "CENTER", 0, -10)
   view.Members:SetText(state.roster and "All Items" or "Members")
   if view.Search.Instructions then view.Search.Instructions:SetText(state.roster and "Search members" or "Search items") end
   local onItem = mode == "crafters" and state.item ~= nil
@@ -777,6 +821,9 @@ function UI.BuildCrafters(parent, inset)
     t:SetPoint("TOPLEFT", view.Categories, "TOPRIGHT", 6, -2)
     t:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -6, 6)
   end
+  roster:ClearAllPoints()
+  roster:SetPoint("TOPLEFT", inset, "TOPLEFT", 6, -36)
+  roster:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -6, 6)
   local bar = CreateFrame("Button", nil, view)
   bar:SetPoint("TOPLEFT", view.Categories, "TOPRIGHT", 8, -4)
   bar:SetPoint("RIGHT", inset, "RIGHT", -8, 0)

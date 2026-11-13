@@ -5,8 +5,8 @@ ZR.Crafts = Crafts
 
 local MINING = 186
 local SMELTING_SPELL = 2656
--- Herbalism and Skinning have a skill level but nothing to craft.
-local GATHERING = { [182] = true, [393] = true }
+-- Gathering and secondary skills have a level but no recipes we share.
+local NO_RECIPES = { [182] = true, [393] = true, [356] = true, [185] = true, [129] = true }
 
 Crafts.PROFESSIONS = {
   { id = 171, name = "Alchemy", icon = "Interface\\Icons\\Trade_Alchemy" },
@@ -20,8 +20,18 @@ Crafts.PROFESSIONS = {
   { id = 393, name = "Skinning", icon = "Interface\\Icons\\INV_Misc_Pelt_Wolf_01" },
 }
 
-local profById = {}
+Crafts.SECONDARY = {
+  { id = 356, name = "Fishing", icon = "Interface\\Icons\\Trade_Fishing" },
+  { id = 185, name = "Cooking", icon = "Interface\\Icons\\INV_Misc_Food_15" },
+  { id = 129, name = "First Aid", icon = "Interface\\Icons\\Spell_Holy_SealOfSacrifice" },
+}
+
+local profById, secondaryById = {}, {}
 for _, p in ipairs(Crafts.PROFESSIONS) do profById[p.id] = p end
+for _, p in ipairs(Crafts.SECONDARY) do
+  profById[p.id] = p
+  secondaryById[p.id] = p
+end
 
 local displayNames = {}
 
@@ -36,7 +46,7 @@ function Crafts.ProfName(id)
 end
 
 function Crafts.HasRecipes(id)
-  return not GATHERING[id]
+  return not NO_RECIPES[id]
 end
 
 function Crafts.Store()
@@ -109,10 +119,26 @@ local function OwnProfessions()
   return out
 end
 
+-- Classified by skill line, since the slot order differs between game versions.
+local function OwnSecondary()
+  local out = {}
+  local _, _, a, b, c, d = GetProfessions()
+  for _, idx in pairs({ a, b, c, d }) do
+    local _, _, rank, max, _, _, skillLine = GetProfessionInfo(idx)
+    if secondaryById[skillLine] then out[skillLine] = { rank = rank or 0, max = max or 0 } end
+  end
+  return out
+end
+
 function Crafts.UpdateOwn()
   local rec = Crafts.Ensure(ZR.PlayerName())
   if not rec then return end
   local own, changed = OwnProfessions(), false
+  local second = OwnSecondary()
+  -- Unlearned ones go out as 0/0, so others can tell them from not shared yet.
+  if next(own) or next(second) then
+    for id in pairs(secondaryById) do own[id] = second[id] or { rank = 0, max = 0 } end
+  end
   rec.c = select(2, UnitClass("player"))
   for skill, info in pairs(own) do
     local p = rec.p[skill]
