@@ -288,22 +288,8 @@ local function InitItemRow(row, e)
   row.Crafters:SetText(CraftersText(e))
 end
 
-local function InviteToGroup(name)
-  local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit
-  if invite then invite(name) end
-end
-
 local function NameMenu(owner, name)
-  if not MenuUtil or not MenuUtil.CreateContextMenu then return end
-  local other = name ~= ZR.PlayerName()
-  MenuUtil.CreateContextMenu(owner, function(_, root)
-    root:CreateTitle(ZR.ColorName(name, ClassOf(name)))
-    root:CreateButton(WHISPER or "Whisper", function() Whisper(name) end):SetEnabled(other)
-    root:CreateButton("Invite to group", function() InviteToGroup(name) end):SetEnabled(other)
-    root:CreateButton("Copy name", function()
-      ZR.ShowCopyBox("Copy name", "Press Ctrl+C to copy it.", name)
-    end)
-  end)
+  UI.NameMenu(owner, name, ClassOf(name))
 end
 
 local RIGHT_CLICK_HINT = "Right-click for whisper, group invite and copy name."

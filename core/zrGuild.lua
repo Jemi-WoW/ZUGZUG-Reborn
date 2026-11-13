@@ -36,9 +36,11 @@ function ZR.RefreshRoster()
   if not GetNumGuildMembers or not GetGuildRosterInfo then return end
   local total, seen = GetNumGuildMembers() or 0, 0
   for i = 1, total do
-    local name, _, _, _, _, _, _, _, online, _, classFile = GetGuildRosterInfo(i)
+    local name, rank, _, level, _, _, _, _, online, _, classFile = GetGuildRosterInfo(i)
     if name and not ZR.IsSecret(name) then
       local info = { online = online and true or false, classFile = classFile }
+      if not ZR.IsSecret(rank) and type(rank) == "string" then info.rank = rank end
+      if not ZR.IsSecret(level) and type(level) == "number" then info.level = level end
       if not online and GetGuildRosterLastOnline then
         local y, mo, d, h = GetGuildRosterLastOnline(i)
         if y then info.away = (((y * 365 + mo * 30 + d) * 24) + h) * 3600 end

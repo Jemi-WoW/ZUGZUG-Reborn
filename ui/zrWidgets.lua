@@ -182,3 +182,27 @@ function UI.CreateCell(row, font, justify)
   fs:SetWordWrap(false)
   return fs
 end
+
+function UI.Whisper(name)
+  local tell = (ChatFrameUtil and ChatFrameUtil.SendTell) or ChatFrame_SendTell
+  if tell then tell(name) end
+end
+
+function UI.InviteToGroup(name)
+  local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit
+  if invite then invite(name) end
+end
+
+-- Right-click actions for a guild member, the same everywhere.
+function UI.NameMenu(owner, name, classFile)
+  if not MenuUtil or not MenuUtil.CreateContextMenu then return end
+  local other = name ~= ZR.PlayerName()
+  MenuUtil.CreateContextMenu(owner, function(_, root)
+    root:CreateTitle(ZR.ColorName(name, classFile))
+    root:CreateButton(WHISPER or "Whisper", function() UI.Whisper(name) end):SetEnabled(other)
+    root:CreateButton("Invite to group", function() UI.InviteToGroup(name) end):SetEnabled(other)
+    root:CreateButton("Copy name", function()
+      ZR.ShowCopyBox("Copy name", "Press Ctrl+C to copy it.", name)
+    end)
+  end)
+end

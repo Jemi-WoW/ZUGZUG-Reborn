@@ -1,8 +1,8 @@
 ## Interface: 16001
-## Title: <|cff00ff00ZUGZUG Reborn|r> v0.3.8
+## Title: <|cff00ff00ZUGZUG Reborn|r> v0.4
 ## Notes: Guild recruiting and a guild crafters directory inside the Guild & Communities window - by Jemi
 ## Author: Jamie/Jemi
-## Version: 0.3.8
+## Version: 0.4
 ## Category: Jemi
 ## IconTexture: Interface\AddOns\ZUGZUG-Reborn\externals\img\ZUGZUGRebornIcon.tga
 ## SavedVariables: ZUGZUGRebornDB
@@ -26,6 +26,7 @@ core/zrSync.lua
 core/zrItemCategories.lua
 core/zrCrafts.lua
 core/zrCraftSync.lua
+core/zrMapSync.lua
 
 ui/zrWidgets.lua
 ui/zrGuildFrame.lua
@@ -37,6 +38,7 @@ ui/crafters/zrCategoryList.lua
 ui/crafters/zrCrafters.lua
 ui/zrPanels_Crafters.lua
 ui/zrMinimap.lua
+ui/zrMapPins.lua
 
 core/zrSlashCommands.lua
 core/zrEvents.lua

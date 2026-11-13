@@ -15,6 +15,7 @@ Runs on **WoW Forever**.
 - **Officer sync** — officers share who was already contacted, even across layers
 - **Crafters** — for every guild member: search who can craft an item, browse by profession or Auction House category, see each member's recipes and whisper them
 - **Automatic** — your recipes are read at login and shared with the guild, new ones as soon as you learn them
+- **Guild map** — guild members show on the world map with their class icon, level and professions; members using MapUtils show too
 - **Officers only** — Recruitment is locked for everyone else
 
 ## Using it
