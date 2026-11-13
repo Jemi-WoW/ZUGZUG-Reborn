@@ -288,6 +288,26 @@ local function InitItemRow(row, e)
   row.Crafters:SetText(CraftersText(e))
 end
 
+local function InviteToGroup(name)
+  local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit
+  if invite then invite(name) end
+end
+
+local function NameMenu(owner, name)
+  if not MenuUtil or not MenuUtil.CreateContextMenu then return end
+  local other = name ~= ZR.PlayerName()
+  MenuUtil.CreateContextMenu(owner, function(_, root)
+    root:CreateTitle(ZR.ColorName(name, ClassOf(name)))
+    root:CreateButton(WHISPER or "Whisper", function() Whisper(name) end):SetEnabled(other)
+    root:CreateButton("Invite to group", function() InviteToGroup(name) end):SetEnabled(other)
+    root:CreateButton("Copy name", function()
+      ZR.ShowCopyBox("Copy name", "Press Ctrl+C to copy it.", name)
+    end)
+  end)
+end
+
+local RIGHT_CLICK_HINT = "Right-click for whisper, group invite and copy name."
+
 local function ShowMemberTooltip(owner, d)
   GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
   GameTooltip_SetTitle(GameTooltip, Dot(d.on) .. " " .. ZR.ColorName(d.name, d.class))
@@ -302,6 +322,7 @@ local function ShowMemberTooltip(owner, d)
       GameTooltip:AddLine("Not shared yet. It shares automatically once they log in with ZUGZUG Reborn.", 0.6, 0.6, 0.6, true)
     end
   end
+  GameTooltip:AddLine(RIGHT_CLICK_HINT, 0.6, 0.6, 0.6, true)
   GameTooltip:Show()
 end
 
@@ -344,9 +365,10 @@ local function InitMemberRow(row, d)
     row.Updated:SetPoint("RIGHT", row.Whisper, "LEFT", -6, 0)
     row:SetScript("OnEnter", MemberTooltip)
     row:SetScript("OnLeave", GameTooltip_Hide)
-    row:RegisterForClicks("LeftButtonUp", "Button4Up")
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp", "Button4Up")
     row:SetScript("OnClick", function(self, button)
       if MouseBack(button) then return end
+      if button == "RightButton" then return NameMenu(self, self.data.name) end
       if Crafts.HasRecipes(self.data.skill) then OpenMember(self.data) end
     end)
   end
@@ -401,16 +423,18 @@ local function RosterTooltip(row)
     GameTooltip:AddDoubleLine(Crafts.ProfName(prof.id), (SecondaryState(Crafts.GetProf(d.name, prof.id))),
       0.8, 0.8, 0.8, 1, 1, 1)
   end
+  GameTooltip:AddLine(" ")
   if FirstCraft(d) then
-    GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Click a profession to see everything they can make.", 0.6, 0.6, 0.6)
   end
+  GameTooltip:AddLine(RIGHT_CLICK_HINT, 0.6, 0.6, 0.6, true)
   GameTooltip:Show()
 end
 
 local function OpenSlot(self, button)
   if MouseBack(button) then return end
   local d = self:GetParent().data
+  if button == "RightButton" then return NameMenu(self, d.name) end
   if Crafts.HasRecipes(self.prof.id) then OpenMember(MemberData(d.name, self.prof.id)) end
 end
 
@@ -437,7 +461,7 @@ local function CreateSlot(row, x, width)
   s.Text = UI.CreateCell(s)
   s.Text:SetPoint("LEFT", s.Icon, "RIGHT", 4, 0)
   s.Text:SetPoint("RIGHT", -2, 0)
-  s:RegisterForClicks("LeftButtonUp", "Button4Up")
+  s:RegisterForClicks("LeftButtonUp", "RightButtonUp", "Button4Up")
   s:SetScript("OnClick", OpenSlot)
   s:SetScript("OnEnter", SlotTooltip)
   s:SetScript("OnLeave", GameTooltip_Hide)
@@ -475,9 +499,10 @@ local function InitRosterRow(row, d)
     row.Seen:SetPoint("RIGHT", row.Whisper, "LEFT", -6, 0)
     row:SetScript("OnEnter", RosterTooltip)
     row:SetScript("OnLeave", GameTooltip_Hide)
-    row:RegisterForClicks("LeftButtonUp", "Button4Up")
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp", "Button4Up")
     row:SetScript("OnClick", function(self, button)
       if MouseBack(button) then return end
+      if button == "RightButton" then return NameMenu(self, self.data.name) end
       local prof = FirstCraft(self.data)
       if prof then OpenMember(MemberData(self.data.name, prof.id)) end
     end)

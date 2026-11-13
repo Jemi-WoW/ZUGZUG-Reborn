@@ -5,6 +5,8 @@ local Contacts = ZR.Contacts
 
 local view, tbl
 local sortKey, sortAsc = "level", true
+-- Sent this session, so a fast double click never hits the same player before the echo lands.
+local nudged = {}
 
 local COLUMNS = {
   { title = "Lvl", width = 38, key = "level" },
@@ -77,6 +79,38 @@ local function BuildRows()
     return va > vb
   end)
   return rows, hiddenContacted
+end
+
+-- Next untouched player in the order the list shows them.
+local function NextUncontacted()
+  local rows = BuildRows()
+  local left, first = 0, nil
+  for _, r in ipairs(rows) do
+    local c = Contacts.Get(r.name)
+    if not nudged[r.name] and (not c or c.s == "new") and not ZR.Invite.PendingAt(r.name) then
+      left = left + 1
+      first = first or r
+    end
+  end
+  return first, left
+end
+
+local function WhisperNext()
+  local r = NextUncontacted()
+  if not r then return end
+  local g = ZR.GDB()
+  if ZR.ChatLocked() or not g or ZR.CleanChat(ZR.FillTemplate(g.template, r.name)) == "" then
+    return ZR.Invite.WhisperTemplate(r.name)
+  end
+  nudged[r.name] = true
+  ZR.Invite.WhisperTemplate(r.name)
+end
+
+local function UpdateWhisperNext()
+  local r, left = NextUncontacted()
+  view.WhisperNext.target = r and r.name
+  view.WhisperNext:SetText(left > 0 and ("Whisper next (%d)"):format(left) or "Whisper next")
+  view.WhisperNext:SetEnabled(r ~= nil)
 end
 
 local function ColumnX(index)
@@ -180,6 +214,7 @@ local function UpdateRows()
   if hidden > 0 then parts[#parts + 1] = hidden .. " contacted hidden" end
   view.Summary:SetText(table.concat(parts, "  |cff666666-|r  "))
   view.Empty:SetShown(#rows == 0)
+  UpdateWhisperNext()
 end
 
 local function UpdateScanState()
@@ -293,6 +328,18 @@ function UI.BuildFastInvite(parent, inset)
   view.ClearButton:SetPoint("RIGHT", view.ScanButton, "LEFT", -2, 0)
   view.ClearButton:SetScript("OnClick", function()
     if Who.state ~= "waiting" then Who.Reset() end
+  end)
+
+  view.WhisperNext = UI.CreateButton(view, "Whisper next", 150, 20)
+  view.WhisperNext:SetPoint("RIGHT", view.ClearButton, "LEFT", -2, 0)
+  view.WhisperNext:SetScript("OnClick", function()
+    WhisperNext()
+    UpdateRows()
+  end)
+  UI.SetButtonTooltip(view.WhisperNext, function(self)
+    local note = "Sends your whisper template to the next player you have not contacted, top of the list first."
+    if self.target then return "Whisper " .. self.target, note end
+    return "Whisper next", "Everyone in the list has been contacted. Scan for more players."
   end)
 
   view.Summary = UI.Text(view, "GameFontHighlightSmall")

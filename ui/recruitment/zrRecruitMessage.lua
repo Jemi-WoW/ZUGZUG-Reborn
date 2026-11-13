@@ -22,6 +22,19 @@ local function PreviewLine(ch, msg)
   return ("[%s] [%s]: %s"):format(label, name, msg), info.r or 1, info.g or 1, info.b or 1
 end
 
+-- Someone from the last scan reads more real than a placeholder.
+local function SampleName()
+  for name in pairs(ZR.Who and ZR.Who.results or {}) do return name end
+  return SAMPLE_NAME
+end
+
+local function WhisperLine(tpl)
+  local info = ChatTypeInfo.WHISPER_INFORM or { r = 1, g = 0.5, b = 1 }
+  local name = SampleName()
+  local msg = ZR.CleanChat(ZR.FillTemplate(tpl, name))
+  return ("To [%s]: %s"):format(name, msg ~= "" and msg or "..."), info.r or 1, info.g or 0.5, info.b or 1
+end
+
 local function CountText(bytes)
   local color = bytes > Channels.MAX_BYTES and "|cffff4040" or "|cffbbbbbb"
   return color .. bytes .. "/" .. Channels.MAX_BYTES .. "|r"
@@ -84,9 +97,18 @@ local function Update()
   view.TemplateCount:SetText(CountText(#tpl))
 
   local nextCh, index, total = Channels.Next()
-  local line, r, gg, b = PreviewLine(nextCh or Channels.List()[1], msg ~= "" and msg or "...")
+  local line, r, gg, b
+  if view.previewMode == "whisper" then
+    line, r, gg, b = WhisperLine(g.template)
+  else
+    line, r, gg, b = PreviewLine(nextCh or Channels.List()[1], msg ~= "" and msg or "...")
+  end
   view.Preview:SetText(line)
   view.Preview:SetTextColor(r, gg, b)
+  for mode, tab in pairs(view.PreviewTabs) do
+    local on = mode == view.previewMode
+    tab:GetFontString():SetTextColor(on and 1 or 0.5, on and 0.82 or 0.5, on and 0 or 0.5)
+  end
 
   local blocker = Channels.Blocker()
   view.PostButton.blocker = blocker
@@ -98,6 +120,42 @@ local function Update()
   view.PostButton:SetEnabled(blocker == nil)
 
   UpdateChannelRows()
+end
+
+local function SetPreview(mode)
+  if view.previewMode == mode then return end
+  view.previewMode = mode
+  Update()
+end
+
+local function PreviewTab(parent, text, mode)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetNormalFontObject("GameFontNormalSmall")
+  b:SetText(text)
+  b:SetSize(b:GetFontString():GetStringWidth() + 4, 16)
+  b:SetScript("OnClick", function() SetPreview(mode) end)
+  return b
+end
+
+-- A multi-line box like the message one, so long text stays readable.
+local function TextBox(parent, title, height, onChange)
+  local box = UI.CreateBox(parent, title)
+  box:SetSize(512, height)
+  local edit = CreateFrame("EditBox", nil, box)
+  edit:SetMultiLine(true)
+  edit:SetAutoFocus(false)
+  edit:SetFontObject("GameFontHighlight")
+  edit:SetPoint("TOPLEFT", 10, -9)
+  edit:SetPoint("BOTTOMRIGHT", -10, 9)
+  edit:SetScript("OnEscapePressed", edit.ClearFocus)
+  -- Chat is single-line, so Enter finishes instead of adding a line.
+  edit:SetScript("OnEnterPressed", edit.ClearFocus)
+  edit:SetScript("OnTextChanged", function(self, user)
+    if user then onChange(self:GetText()) end
+  end)
+  box:EnableMouse(true)
+  box:SetScript("OnMouseDown", function() edit:SetFocus() end)
+  return box, edit
 end
 
 local function Post()
@@ -117,35 +175,29 @@ function UI.BuildRecruitMessage(parent, inset)
   view = CreateFrame("Frame", nil, parent)
   view:SetAllPoints(parent)
 
-  local msgBox = UI.CreateBox(view, "Recruitment message")
-  msgBox:SetPoint("TOPLEFT", inset, "TOPLEFT", 14, -26)
-  msgBox:SetSize(512, 86)
-  view.MessageCount = UI.Text(view, "GameFontHighlightSmall")
-  view.MessageCount:SetPoint("BOTTOMRIGHT", msgBox, "TOPRIGHT", -4, 3)
-
-  local edit = CreateFrame("EditBox", nil, msgBox)
-  edit:SetMultiLine(true)
-  edit:SetAutoFocus(false)
-  edit:SetFontObject("GameFontHighlight")
-  edit:SetPoint("TOPLEFT", 10, -9)
-  edit:SetPoint("BOTTOMRIGHT", -10, 9)
-  edit:SetScript("OnEscapePressed", edit.ClearFocus)
-  edit:SetScript("OnEnterPressed", edit.ClearFocus)
-  edit:SetScript("OnTextChanged", function(self, user)
-    if not user then return end
+  local msgBox, edit = TextBox(view, "Recruitment message", 76, function(text)
     local g = ZR.GDB()
     if g then
-      g.message = self:GetText()
+      g.message = text
       Channels.ResetRound()
     end
   end)
-  msgBox:EnableMouse(true)
-  msgBox:SetScript("OnMouseDown", function() edit:SetFocus() end)
+  msgBox:SetPoint("TOPLEFT", inset, "TOPLEFT", 14, -26)
+  view.MessageCount = UI.Text(view, "GameFontHighlightSmall")
+  view.MessageCount:SetPoint("BOTTOMRIGHT", msgBox, "TOPRIGHT", -4, 3)
+  edit:HookScript("OnEditFocusGained", function() SetPreview("channel") end)
   view.MessageEdit = edit
 
   local prevBox = UI.CreateBox(view, "Chat preview")
-  prevBox:SetPoint("TOPLEFT", msgBox, "BOTTOMLEFT", 0, -26)
+  prevBox:SetPoint("TOPLEFT", msgBox, "BOTTOMLEFT", 0, -24)
   prevBox:SetSize(512, 66)
+  view.previewMode = "channel"
+  view.PreviewTabs = {
+    whisper = PreviewTab(prevBox, "Whisper", "whisper"),
+    channel = PreviewTab(prevBox, "Channel post", "channel"),
+  }
+  view.PreviewTabs.whisper:SetPoint("BOTTOMRIGHT", prevBox, "TOPRIGHT", -4, 1)
+  view.PreviewTabs.channel:SetPoint("RIGHT", view.PreviewTabs.whisper, "LEFT", -10, 0)
   prevBox:SetBackdropColor(0, 0, 0, 0.85)
   view.Preview = prevBox:CreateFontString(nil, "ARTWORK", "ChatFontNormal")
   local font, size, flags = DEFAULT_CHAT_FRAME:GetFont()
@@ -155,28 +207,24 @@ function UI.BuildRecruitMessage(parent, inset)
   view.Preview:SetJustifyH("LEFT")
   view.Preview:SetJustifyV("TOP")
 
-  local tplLabel = UI.Text(view, "GameFontNormal", "Whisper template")
-  tplLabel:SetPoint("TOPLEFT", prevBox, "BOTTOMLEFT", 4, -16)
-  local tplHint = UI.Text(view, "GameFontDisableSmall", "{name} = their name, {guild} = your guild")
-  tplHint:SetPoint("LEFT", tplLabel, "RIGHT", 8, 0)
-  view.TemplateCount = UI.Text(view, "GameFontHighlightSmall")
-  view.TemplateCount:SetPoint("TOPRIGHT", prevBox, "BOTTOMRIGHT", -4, -17)
-
-  local tpl = UI.CreateInput(view, 504, 22)
-  tpl:SetPoint("TOPLEFT", tplLabel, "BOTTOMLEFT", 2, -4)
-  tpl:SetMaxBytes(512)
-  tpl:SetScript("OnTextChanged", function(self, user)
-    if not user then return end
+  local tplBox, tpl = TextBox(view, "Whisper template", 76, function(text)
     local g = ZR.GDB()
     if g then
-      g.template = self:GetText()
+      g.template = text
       Update()
     end
   end)
+  tplBox:SetPoint("TOPLEFT", prevBox, "BOTTOMLEFT", 0, -24)
+  tpl:SetMaxBytes(512)
+  tpl:HookScript("OnEditFocusGained", function() SetPreview("whisper") end)
+  local tplHint = UI.Text(view, "GameFontDisableSmall", "{name} = their name, {guild} = your guild")
+  tplHint:SetPoint("LEFT", tplBox.Title, "RIGHT", 8, 0)
+  view.TemplateCount = UI.Text(view, "GameFontHighlightSmall")
+  view.TemplateCount:SetPoint("BOTTOMRIGHT", tplBox, "TOPRIGHT", -4, 3)
   view.TemplateEdit = tpl
 
-  local tplNote = UI.Text(view, "GameFontDisableSmall", "Sent by the Whisper button on Fast Invite. Shift-click Whisper to type your own.")
-  tplNote:SetPoint("TOPLEFT", tpl, "BOTTOMLEFT", -2, -6)
+  local tplNote = UI.Text(view, "GameFontDisableSmall", "Sent by Whisper and Whisper next on Fast Invite. Shift-click Whisper to type your own.")
+  tplNote:SetPoint("TOPLEFT", tplBox, "BOTTOMLEFT", 2, -5)
 
   view.ChannelBox = UI.CreateBox(view, "Channels")
   view.ChannelBox:SetPoint("TOPLEFT", inset, "TOPLEFT", 548, -26)
